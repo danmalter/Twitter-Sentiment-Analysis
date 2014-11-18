@@ -1,0 +1,432 @@
+---
+title: "MLB Teams Twitter Sentiment"
+author: "Danny Malter"
+date: "November 9, 2014"
+output: html_document
+---
+======================================================
+
+#### Introduction ####
+In this assignment, I have scraped Twitter data for all 30 major league baseball teams and have given the tweet a positve or negative rating based off of Hu & Liu's [opinion lexicon](http://www.cs.uic.edu/~liub/FBS/sentiment-analysis.html).  For example, a tweet with 5 positve words and 3 negative words will be given a sentiment score of +2.  Each team is searched for in Twitter by using a hashtag followed by the team name. Teams with common names or with the same name as a team from another sport were included with
+
+#### Loading and Processing ####
+Install/load R packages
+```{r, echo=TRUE, results='hide'}
+library(devtools)
+install_github("twitteR", username="geoffjentry")
+library(twitteR)
+library(rjson)
+library(httr)
+library(stringr)
+library(ggplot2)
+library(RColorBrewer)
+library(plyr)
+library(bit64)
+```
+
+Access Twitter's API
+```{r, echo=TRUE}
+#api_key <- "####"
+#api_secret <- "####"
+#access_token <- "####"
+#access_token_secret <- "####"
+#setup_twitter_oauth(api_key,api_secret,access_token,access_token_secret)
+```
+
+```{r, echo=FALSE}
+api_key <- "2i96Rb39gwmZKEdf3tSkkFTsH"
+api_secret <- "4jkj1GYkxzXCqOH14b51aMpOuO6chjvfrWByCuSXt6yYGai6kU"
+access_token <- "508003181-FkCfOvl9FTzpRXRYnEg3QzAmgqzlrDuAZYyKG1tM"
+access_token_secret <- "TDXW3yM2silSaA0ocX7sZYhUObPKKJG7wg0y4K3qlBgr3"
+setup_twitter_oauth(api_key,api_secret,access_token,access_token_secret)
+```
+
+#### Data Processing  #### 
+Load in Hu & Liu's [opinion lexicon](http://www.cs.uic.edu/~liub/FBS/opinion-lexicon-English.rar) of positive and negative words
+```{r}
+pos.words <- scan('/Users/Malter/Twitter/positive-words.txt', what='character', comment.char=';')
+neg.words <- scan('/Users/Malter/Twitter/negative-words.txt', what='character', comment.char=';')
+```
+
+Twitter Score Sentiment<br>
+Use a score sentiment function created by [Jeff Breen](https://github.com/jeffreybreen/twitter-sentiment-analysis-tutorial-201107)
+```{r, echo=TRUE}
+score.sentiment = function(sentences, pos.words, neg.words, .progress='none')
+{
+    require(plyr)
+    require(stringr)
+    scores = laply(sentences, function(sentence, pos.words, neg.words) {
+        sentence = gsub('[[:punct:]]', '', sentence)
+        sentence = gsub('[[:cntrl:]]', '', sentence)
+        sentence = gsub('\\d+', '', sentence)
+        sentence = tolower(sentence)
+        word.list = str_split(sentence, '\\s+')
+        words = unlist(word.list)
+        pos.matches = match(words, pos.words)
+        neg.matches = match(words, neg.words)
+        pos.matches = !is.na(pos.matches)
+        neg.matches = !is.na(neg.matches)
+        score = sum(pos.matches) - sum(neg.matches)
+        return(score)
+    }, pos.words, neg.words, .progress=.progress )
+    scores.df = data.frame(score=scores, text=sentences)
+    return(scores.df)
+}
+```
+
+Scrape Twitter for each MLB team using the team's official hashtag.  Team names that coincide with other sports or common terms were included with an @ rather than a #. <br>
+- Example code for AL East
+```{r, echo=TRUE}
+orioles.tweets <- searchTwitter('#orioles', n=500, lang="en")
+yankees.tweets <- searchTwitter('#yankees', n=500, lang="en")
+bluejays.tweets <- searchTwitter('#bluejays', n=500, lang="en")
+rays.tweets <- searchTwitter('#rays', n=500, lang="en")
+redsox.tweets <- searchTwitter('#redsox', n=500, lang="en")
+```
+```{r, echo=FALSE}
+whitesox.tweets <- searchTwitter('#whitesox', n=500, lang="en")
+tigers.tweets <- searchTwitter('#tigers', n=500, lang="en")
+twins.tweets <- searchTwitter('@twins', n=500, lang="en")
+royals.tweets <- searchTwitter('@royals', n=500, lang="en")
+indians.tweets <- searchTwitter('#indians', n=500, lang="en")
+
+angels.tweets <- searchTwitter('#angels', n=500, lang="en")
+athletics.tweets <- searchTwitter('#athletics', n=500, lang="en")
+mariners.tweets <- searchTwitter('#mariners', n=500, lang="en")
+astros.tweets <- searchTwitter('#astros', n=500, lang="en")
+rangers.tweets <- searchTwitter('rangers + mlb', n=500, lang="en")
+
+nationals.tweets <- searchTwitter('#nats', n=500, lang="en")
+mets.tweets <- searchTwitter('#mets', n=500, lang="en")
+braves.tweets <- searchTwitter('#braves', n=500, lang="en")
+marlins.tweets <- searchTwitter('#marlins', n=500, lang="en")
+phillies.tweets <- searchTwitter('#phillies', n=500, lang="en")
+
+cardinals.tweets <- searchTwitter('#stlcards', n=500, lang="en")
+pirates.tweets <- searchTwitter('#pirates', n=500, lang="en")
+brewers.tweets <- searchTwitter('#brewers', n=500, lang="en")
+reds.tweets <- searchTwitter('#reds', n=500, lang="en")
+cubs.tweets <- searchTwitter('#cubs', n=500, lang="en")
+
+dodgers.tweets <- searchTwitter('#dodgers', n=500, lang="en")
+giants.tweets <- searchTwitter('#giants', n=500, lang="en")
+padres.tweets <- searchTwitter('#padres', n=500, lang="en")
+rockies.tweets <- searchTwitter('#rockies', n=500, lang="en")
+diamondbacks.tweets <- searchTwitter('#dbacks', n=500, lang="en")
+```
+
+Create an array of the output text for each division. <br>
+- Example code for AL East
+```{r, echo=TRUE}
+orioles.text = laply(orioles.tweets, function(t) t$getText())
+yankees.text = laply(yankees.tweets, function(t) t$getText())
+bluejays.text = laply(bluejays.tweets, function(t) t$getText())
+rays.text = laply(rays.tweets, function(t) t$getText())
+redsox.text = laply(redsox.tweets, function(t) t$getText())
+```
+```{r, echo=FALSE}
+whitesox.text = laply(whitesox.tweets, function(t) t$getText())
+tigers.text = laply(tigers.tweets, function(t) t$getText())
+twins.text = laply(twins.tweets, function(t) t$getText())
+royals.text = laply(royals.tweets, function(t) t$getText())
+indians.text = laply(indians.tweets, function(t) t$getText())
+
+angels.text = laply(angels.tweets, function(t) t$getText())
+athletics.text = laply(athletics.tweets, function(t) t$getText())
+mariners.text = laply(mariners.tweets, function(t) t$getText())
+astros.text = laply(astros.tweets, function(t) t$getText())
+rangers.text = laply(rangers.tweets, function(t) t$getText())
+
+nationals.text = laply(nationals.tweets, function(t) t$getText())
+mets.text = laply(mets.tweets, function(t) t$getText())
+braves.text = laply(braves.tweets, function(t) t$getText())
+marlins.text = laply(marlins.tweets, function(t) t$getText())
+phillies.text = laply(phillies.tweets, function(t) t$getText())
+
+cardinals.text = laply(cardinals.tweets, function(t) t$getText())
+pirates.text = laply(pirates.tweets, function(t) t$getText())
+brewers.text = laply(brewers.tweets, function(t) t$getText())
+reds.text = laply(reds.tweets, function(t) t$getText())
+cubs.text = laply(cubs.tweets, function(t) t$getText())
+
+dodgers.text = laply(dodgers.tweets, function(t) t$getText())
+giants.text = laply(giants.tweets, function(t) t$getText())
+padres.text = laply(padres.tweets, function(t) t$getText())
+rockies.text = laply(rockies.tweets, function(t) t$getText())
+diamondbacks.text = laply(diamondbacks.tweets, function(t) t$getText())
+```
+
+Strip out funny characters, such as emoticons. <br>
+- Example code for AL East
+```{r, echo=TRUE}
+orioles.text = gsub("[^[:alnum:]|^[:space:]]", "", orioles.text)
+yankees.text = gsub("[^[:alnum:]|^[:space:]]", "", yankees.text)
+bluejays.text = gsub("[^[:alnum:]|^[:space:]]", "", bluejays.text)
+rays.text = gsub("[^[:alnum:]|^[:space:]]", "", rays.text)
+redsox.text = gsub("[^[:alnum:]|^[:space:]]", "", redsox.text)
+```
+```{r, echo=FALSE}
+whitesox.text = gsub("[^[:alnum:]|^[:space:]]", "", whitesox.text)
+tigers.text = gsub("[^[:alnum:]|^[:space:]]", "", tigers.text)
+twins.text = gsub("[^[:alnum:]|^[:space:]]", "", twins.text)
+royals.text = gsub("[^[:alnum:]|^[:space:]]", "", royals.text)
+indians.text = gsub("[^[:alnum:]|^[:space:]]", "", indians.text)
+
+angels.text = gsub("[^[:alnum:]|^[:space:]]", "", angels.text)
+athletics.text = gsub("[^[:alnum:]|^[:space:]]", "", athletics.text)
+mariners.text = gsub("[^[:alnum:]|^[:space:]]", "", mariners.text)
+astros.text = gsub("[^[:alnum:]|^[:space:]]", "", astros.text)
+rangers.text = gsub("[^[:alnum:]|^[:space:]]", "", rangers.text)
+
+nationals.text = gsub("[^[:alnum:]|^[:space:]]", "", nationals.text)
+mets.text = gsub("[^[:alnum:]|^[:space:]]", "", mets.text)
+braves.text = gsub("[^[:alnum:]|^[:space:]]", "", braves.text)
+marlins.text = gsub("[^[:alnum:]|^[:space:]]", "", marlins.text)
+phillies.text = gsub("[^[:alnum:]|^[:space:]]", "", phillies.text)
+
+cardinals.text = gsub("[^[:alnum:]|^[:space:]]", "", cardinals.text)
+pirates.text = gsub("[^[:alnum:]|^[:space:]]", "", pirates.text)
+brewers.text = gsub("[^[:alnum:]|^[:space:]]", "", brewers.text)
+reds.text = gsub("[^[:alnum:]|^[:space:]]", "", reds.text)
+cubs.text = gsub("[^[:alnum:]|^[:space:]]", "", cubs.text)
+
+dodgers.text = gsub("[^[:alnum:]|^[:space:]]", "", dodgers.text)
+giants.text = gsub("[^[:alnum:]|^[:space:]]", "", giants.text)
+padres.text = gsub("[^[:alnum:]|^[:space:]]", "", padres.text)
+rockies.text = gsub("[^[:alnum:]|^[:space:]]", "", rockies.text)
+diamondbacks.text = gsub("[^[:alnum:]|^[:space:]]", "", diamondbacks.text)
+```
+
+Give a score to each team's tweet recorded. <br>
+```{r, echo=TRUE, results='hide'}
+orioles.scores <- score.sentiment(orioles.text, pos.words, 
+                                   neg.words, .progress='text')
+yankees.scores <- score.sentiment(yankees.text, pos.words, 
+                                   neg.words, .progress='text')
+bluejays.scores <- score.sentiment(bluejays.text, pos.words, 
+                                   neg.words, .progress='text')
+rays.scores <- score.sentiment(rays.text, pos.words, 
+                                   neg.words, .progress='text')
+redsox.scores <- score.sentiment(redsox.text, pos.words, 
+                                   neg.words, .progress='text')
+```
+```{r, echo=FALSE, results='hide'}
+whitesox.scores <- score.sentiment(whitesox.text, pos.words, 
+                                   neg.words, .progress='text')
+tigers.scores <- score.sentiment(tigers.text, pos.words, 
+                                  neg.words, .progress='text')
+twins.scores <- score.sentiment(twins.text, pos.words, 
+                                   neg.words, .progress='text')
+royals.scores <- score.sentiment(royals.text, pos.words, 
+                               neg.words, .progress='text')
+indians.scores <- score.sentiment(indians.text, pos.words, 
+                                 neg.words, .progress='text')
+
+angels.scores <- score.sentiment(angels.text, pos.words, 
+                                   neg.words, .progress='text')
+athletics.scores <- score.sentiment(athletics.text, pos.words, 
+                                 neg.words, .progress='text')
+mariners.scores <- score.sentiment(mariners.text, pos.words, 
+                                neg.words, .progress='text')
+astros.scores <- score.sentiment(astros.text, pos.words, 
+                                 neg.words, .progress='text')
+rangers.scores <- score.sentiment(rangers.text, pos.words, 
+                                  neg.words, .progress='text')
+
+nationals.scores <- score.sentiment(nationals.text, pos.words, 
+                                 neg.words, .progress='text')
+mets.scores <- score.sentiment(mets.text, pos.words, 
+                                    neg.words, .progress='text')
+braves.scores <- score.sentiment(braves.text, pos.words, 
+                                   neg.words, .progress='text')
+marlins.scores <- score.sentiment(marlins.text, pos.words, 
+                                 neg.words, .progress='text')
+phillies.scores <- score.sentiment(phillies.text, pos.words, 
+                                  neg.words, .progress='text')
+
+cardinals.scores <- score.sentiment(cardinals.text, pos.words, 
+                                    neg.words, .progress='text')
+pirates.scores <- score.sentiment(pirates.text, pos.words, 
+                               neg.words, .progress='text')
+brewers.scores <- score.sentiment(brewers.text, pos.words, 
+                                 neg.words, .progress='text')
+reds.scores <- score.sentiment(reds.text, pos.words, 
+                                  neg.words, .progress='text')
+cubs.scores <- score.sentiment(cubs.text, pos.words, 
+                                   neg.words, .progress='text')
+
+dodgers.scores <- score.sentiment(dodgers.text, pos.words, 
+                                    neg.words, .progress='text')
+giants.scores <- score.sentiment(giants.text, pos.words, 
+                                  neg.words, .progress='text')
+padres.scores <- score.sentiment(padres.text, pos.words, 
+                                  neg.words, .progress='text')
+rockies.scores <- score.sentiment(rockies.text, pos.words, 
+                               neg.words, .progress='text')
+diamondbacks.scores <- score.sentiment(diamondbacks.text, pos.words, 
+                               neg.words, .progress='text')
+```
+
+Give a name and code to each team <br>
+- Example code for AL East
+```{r, echo=TRUE}
+orioles.scores$team = 'Orioles'
+orioles.scores$code = 'BAL'
+yankees.scores$team = 'Yankees'
+yankees.scores$code = 'NYA'
+bluejays.scores$team = 'Blue Jays'
+bluejays.scores$code = 'TOR'
+rays.scores$team = 'Rays'
+rays.scores$code = 'TBA'
+redsox.scores$team = 'Red Sox'
+redsox.scores$code = 'BOS'
+```
+```{r, echo=FALSE}
+whitesox.scores$team = 'White Sox'
+whitesox.scores$code = 'CHA'
+tigers.scores$team = 'Tigers'
+tigers.scores$code = 'DET'
+twins.scores$team = 'Twins'
+twins.scores$code = 'MIN'
+royals.scores$team = 'Royals'
+royals.scores$code = 'KCA'
+indians.scores$team = 'Indians'
+indians.scores$code = 'CLE'
+
+angels.scores$team = 'Angels'
+angels.scores$code = 'LAA'
+athletics.scores$team = "A's"
+athletics.scores$code = 'OAK'
+mariners.scores$team = 'Marineres'
+mariners.scores$code = 'SEA'
+astros.scores$team = 'Astros'
+astros.scores$code = 'HOU'
+rangers.scores$team = 'Rangers'
+rangers.scores$code = 'TEX'
+
+nationals.scores$team = 'Nationals'
+nationals.scores$code = 'WSN'
+mets.scores$team = 'Mets'
+mets.scores$code = 'NYN'
+braves.scores$team = 'Braves'
+braves.scores$code = 'ATL'
+marlins.scores$team = 'Marlins'
+marlins.scores$code = 'MIA'
+phillies.scores$team = 'Phillies'
+phillies.scores$code = 'PHI'
+
+cardinals.scores$team = 'Cardinals'
+cardinals.scores$code = 'STL'
+pirates.scores$team = 'Pirates'
+pirates.scores$code = 'PIT'
+brewers.scores$team = 'Brewers'
+brewers.scores$code = 'MIL'
+reds.scores$team = 'Reds'
+reds.scores$code = 'CIN'
+cubs.scores$team = 'Cubs'
+cubs.scores$code = 'CHN'
+
+dodgers.scores$team = 'Dodgers'
+dodgers.scores$code = 'LAD'
+giants.scores$team = 'Giants'
+giants.scores$code = 'SFN'
+padres.scores$team = 'Padres'
+padres.scores$code = 'SDN'
+rockies.scores$team = 'Rockies'
+rockies.scores$code = 'COL'
+diamondbacks.scores$team = 'D-backs'
+diamondbacks.scores$code = 'ARI'
+```
+
+Use rbind to put together tweets from each division
+```{r, echo=TRUE}
+aleast.scores = rbind(orioles.scores, yankees.scores, bluejays.scores, rays.scores, redsox.scores)
+alcentral.scores = rbind(whitesox.scores, tigers.scores, twins.scores, royals.scores, indians.scores)
+alwest.scores = rbind(angels.scores, athletics.scores, mariners.scores, astros.scores, rangers.scores)
+nleast.scores = rbind(nationals.scores, mets.scores, braves.scores, marlins.scores, phillies.scores)
+nlcentral.scores = rbind(cardinals.scores, pirates.scores, brewers.scores, reds.scores, cubs.scores)
+nlwest.scores = rbind(dodgers.scores, giants.scores, padres.scores, rockies.scores, diamondbacks.scores)
+```
+
+#### Results  #### 
+Create a bar plot for each division <br>
+- Example code for AL East <br>
+```{r, echo=TRUE}
+ggplot(data=aleast.scores) +
+    geom_bar(mapping=aes(x=score, fill=team), binwidth=1) + 
+    facet_grid(team~.) +
+    theme_bw() + scale_color_brewer() +
+    labs(title="AL East Sentiment")
+```
+```{r, echo=FALSE}
+ggplot(data=alcentral.scores) +
+    geom_bar(mapping=aes(x=score, fill=team), binwidth=1) + 
+    facet_grid(team~.) +
+    theme_bw() + scale_color_brewer() +
+    labs(title="AL Central Sentiment")
+
+ggplot(data=aleast.scores) +
+    geom_bar(mapping=aes(x=score, fill=team), binwidth=1) + 
+    facet_grid(team~.) +
+    theme_bw() + scale_color_brewer() +
+    labs(title="AL West Sentiment")
+ 
+ggplot(data=nleast.scores) +
+    geom_bar(mapping=aes(x=score, fill=team), binwidth=1) + 
+    facet_grid(team~.) +
+    theme_bw() + scale_color_brewer() +
+    labs(title="NL East Sentiment")
+
+ggplot(data=nlcentral.scores) +
+    geom_bar(mapping=aes(x=score, fill=team), binwidth=1) + 
+    facet_grid(team~.) +
+    theme_bw() + scale_color_brewer()  +
+    labs(title="NL Central Sentiment")
+
+ggplot(data=nleast.scores) +
+    geom_bar(mapping=aes(x=score, fill=team), binwidth=1) + 
+    facet_grid(team~.) +
+    theme_bw() + scale_color_brewer() +
+    labs(title="NL West Sentiment")
+```
+
+Create a box plot for each division <br>
+- Example code for AL East <br>
+```{r, echo=TRUE}
+ggplot(aleast.scores, aes(x=team, y=score, group=team)) +
+    geom_boxplot(aes(fill=team)) +
+    geom_jitter(color="gray40",
+                position=position_jitter(width=0.2), alpha=0.3) +
+    ggtitle("Boxplot - AL East's Sentiment Scores")
+```
+```{r, echo=FALSE}
+ggplot(alcentral.scores, aes(x=team, y=score, group=team)) +
+    geom_boxplot(aes(fill=team)) +
+    geom_jitter(color="gray40",
+                position=position_jitter(width=0.2), alpha=0.3) +
+    ggtitle("Boxplot - AL Central's Sentiment Scores")
+
+ggplot(alwest.scores, aes(x=team, y=score, group=team)) +
+    geom_boxplot(aes(fill=team)) +
+    geom_jitter(color="gray40",
+                position=position_jitter(width=0.2), alpha=0.3) +
+    ggtitle("Boxplot - AL West's Sentiment Scores")
+
+ggplot(nleast.scores, aes(x=team, y=score, group=team)) +
+    geom_boxplot(aes(fill=team)) +
+    geom_jitter(color="gray40",
+                position=position_jitter(width=0.2), alpha=0.3) +
+    ggtitle("Boxplot - NL East's Sentiment Scores")
+
+ggplot(nlcentral.scores, aes(x=team, y=score, group=team)) +
+    geom_boxplot(aes(fill=team)) +
+    geom_jitter(color="gray40",
+                position=position_jitter(width=0.2), alpha=0.3) +
+    ggtitle("Boxplot - NL Central's Sentiment Scores")
+
+ggplot(nlwest.scores, aes(x=team, y=score, group=team)) +
+    geom_boxplot(aes(fill=team)) +
+    geom_jitter(color="gray40",
+                position=position_jitter(width=0.2), alpha=0.3) +
+    ggtitle("Boxplot - NL West's Sentiment Scores")
+```
